@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Video Studio</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#131b2f;--line:#27334e;--muted:#9aa9c4;--text:#edf3ff;--accent:#7c9cff;--good:#4dd4a2;--warn:#f3bd61}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 20% 0,#1b2a4b 0,transparent 45%),var(--bg);color:var(--text);font:15px Inter,system-ui,Segoe UI,sans-serif}
+header{padding:26px max(22px,calc((100vw - 1180px)/2));border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;align-items:center}
+h1{margin:0;font-size:25px;letter-spacing:-.7px}h2{font-size:17px;margin:0 0 16px}.muted{color:var(--muted)}main{max-width:1180px;margin:24px auto;padding:0 20px}
+.grid{display:grid;grid-template-columns:1.3fr .7fr;gap:18px}.panel{background:linear-gradient(145deg,#17223a,#11192b);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 12px 40px #0002;margin-bottom:18px}
+input,select,textarea,button{font:inherit}input,select,textarea{width:100%;background:#0b1325;color:var(--text);border:1px solid #34415e;border-radius:9px;padding:11px;margin:7px 0 13px}textarea{min-height:90px;resize:vertical}
+label{font-size:13px;color:#c6d2e8}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.btn{border:0;border-radius:9px;padding:12px 16px;background:var(--accent);color:#071127;font-weight:750;cursor:pointer}.btn.secondary{background:#263653;color:var(--text);border:1px solid #3a4b6b}.btn:disabled{opacity:.45;cursor:not-allowed}
+.status{display:inline-flex;padding:6px 10px;border-radius:999px;background:#263653;color:#cbd8f2;font-size:12px}.status.good{background:#12392f;color:#8bf0ca}.status.warn{background:#47341a;color:#ffd58d}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.tile{background:#0c1528;border:1px solid var(--line);padding:12px;border-radius:10px}.tile b{display:block;font-size:20px;margin-top:4px}.tile small{color:var(--muted)}
+.preview{width:100%;max-height:440px;background:#05080f;border-radius:12px;margin-top:14px}progress{width:100%;height:10px;accent-color:var(--accent)}
+.notice{font-size:12px;color:#f6d18d;background:#3c2d17;padding:10px;border-radius:8px;margin:8px 0 14px}
+.merge-item{display:flex;align-items:center;gap:8px;padding:7px 0}.merge-item input{width:auto;margin:0}.merge-item label{font-size:13px;word-break:break-all}#log{white-space:pre-wrap;word-break:break-word;color:#b9c8e5;font-size:12px;margin-top:12px}
+footer{max-width:1180px;margin:0 auto;padding:10px 20px 36px;color:var(--muted);font-size:12px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}.row{grid-template-columns:1fr}}
+</style></head>
+<body>
+<header><div><h1>✦ AI Video Studio</h1><div class="muted">Image-to-video generation · video tools · GPU workspace</div></div><span id="connection" class="status warn">Backend not connected</span></header>
+<main>
+<section class="panel">
+<h2>Connect your Kaggle session</h2>
+<div class="row"><div><label>Cloudflare HTTPS tunnel URL</label><input id="api" placeholder="https://xxxx.trycloudflare.com"></div><div><label>Session API key</label><input id="key" type="password" placeholder="Enter your AI_VIDEO_API_KEY secret"></div></div>
+<button class="btn secondary" id="connect">Connect & refresh status</button><span id="clock" class="muted" style="margin-left:12px"></span>
+</section>
+<div class="grid">
+<div>
+<section class="panel">
+<h2>Image to video</h2>
+<label>Choose model</label><select id="model"><option value="svd_xt">Stable Video Diffusion XT — available</option><option disabled>CogVideoX-5B-I2V — planned / not enabled</option><option disabled>Wan 2.1 I2V — planned / not enabled</option><option disabled>LTX-Video I2V — planned / not enabled</option></select>
+<div class="notice">SVD-XT does not accept text prompts. Your prompt is saved as a note but does not control generation. Prompt-capable models will be enabled after separate integration and hardware tests.</div>
+<label>Upload source image</label><input id="image" type="file" accept="image/png,image/jpeg,image/webp">
+<label>Motion description / prompt note</label><textarea id="prompt" placeholder="Describe the motion you want. Note: SVD-XT will not interpret this text."></textarea>
+<div class="row"><div><label>Inference steps</label><input id="steps" type="number" min="5" max="10" value="10"></div><div><label>Motion strength (0–255)</label><input id="motion" type="number" min="0" max="255" value="127"></div></div>
+<button class="btn" id="generate">Generate video</button><progress id="progress" value="0" max="100" style="display:none"></progress><div id="jobmsg" class="muted"></div>
+<video id="generated" class="preview" controls playsinline style="display:none"></video><div id="download"></div>
+</section>
+<section class="panel">
+<h2>Easy video editor</h2>
+<p class="muted">Simple workflow: add clips → choose an operation → preview → download. Your original file is kept unchanged.</p>
+<label>Add video clips (you can select more than one)</label>
+<input id="editfile" type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm" multiple>
+<button class="btn secondary" id="uploadVideo">Add selected videos</button>
+<div id="uploadedName" class="muted" style="margin:8px 0 14px">No clips added yet.</div>
+<hr style="border:0;border-top:1px solid #27334e;margin:16px 0">
+<h3 style="font-size:15px">1. Choose the clip to edit</h3>
+<label>Clip</label><select id="editClip"><option value="">Upload a video first</option></select>
+<video id="sourcePreview" class="preview" controls playsinline style="display:none"></video>
+<h3 style="font-size:15px;margin-top:18px">2. Trim clip</h3>
+<p class="muted">Enter the start and end time in seconds. Example: start 2, end 8 keeps the 6-second section.</p>
+<div class="row">
+<div><label>Start time (seconds)</label><input id="start" type="number" min="0" step=".1" value="0"></div>
+<div><label>End time (seconds)</label><input id="end" type="number" min=".1" step=".1" value="5"></div>
+</div>
+<button class="btn secondary" id="trim">Trim selected clip</button>
+<h3 style="font-size:15px;margin-top:18px">3. Resize / export</h3>
+<label>Output size</label>
+<select id="resizePreset">
+<option value="1280x720">HD 720p (recommended)</option>
+<option value="1920x1080">Full HD 1080p</option>
+<option value="854x480">SD 480p — smaller file</option>
+<option value="custom">Custom size</option>
+</select>
+<div class="row" id="customSize" style="display:none">
+<div><label>Width</label><input id="width" type="number" min="256" max="1920" value="1280"></div>
+<div><label>Height</label><input id="height" type="number" min="256" max="1080" value="720"></div>
+</div>
+<button class="btn secondary" id="resize">Resize selected clip</button>
+<h3 style="font-size:15px;margin-top:18px">4. Join clips</h3>
+<p class="muted">Select at least two clips. They will be joined in the order shown below.</p>
+<div id="mergeList" class="muted">Add clips to enable joining.</div>
+<button class="btn secondary" id="merge">Join selected clips</button>
+<video id="edited" class="preview" controls playsinline style="display:none"></video>
+<div id="editDownload"></div><div id="editStatus" class="muted" style="margin-top:8px"></div>
+</section>
+</div>
+<aside>
+<section class="panel"><h2>Live resources</h2><div class="tiles">
+<div class="tile"><small>CPU load</small><b id="cpu">—</b></div><div class="tile"><small>RAM used</small><b id="ram">—</b></div><div class="tile"><small>Disk free</small><b id="disk">—</b></div><div class="tile"><small>GPU devices</small><b id="gpus">—</b></div></div><div id="gpuinfo" class="muted" style="margin-top:12px"></div></section>
+<section class="panel"><h2>Model availability</h2><div id="models" class="muted">Connect backend to load model status.</div></section>
+<section class="panel"><h2>Session information</h2><div class="muted">Website: permanent GitHub Pages address<br>GPU backend: active only while Kaggle and Cloudflare are running.<br><br>Generated files are stored in the current Kaggle session unless you download or back them up.</div></section>
+</aside>
+</div><div id="log"></div>
+</main><footer>AI Video Studio · Free/open-source software components · Do not expose your API key or tunnel URL publicly.</footer>
+<script>
+const $=id=>document.getElementById(id);let uploadedVideo="";
+function base(){return $("api").value.trim().replace(/\/+$/,"")}
+function headers(){return {"X-API-Key":$("key").value}}
+function say(t){$("log").textContent=t}
+async function req(path,opts={}){if(!base())throw Error("Enter the Cloudflare URL first.");let r=await fetch(base()+path,{...opts,headers:{...(opts.headers||{}),...(opts.auth?headers():{})}});let j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.detail||r.statusText);return j}
+$("clock").textContent=new Date().toLocaleString();
+// The Kaggle notebook updates this public file after starting Cloudflare.
+fetch("./tunnel-config.json",{cache:"no-store"}).then(r=>r.ok?r.json():{}).then(c=>{
+  if(c.api_url && !$("api").value) $("api").value=c.api_url;
+}).catch(()=>{});
+setInterval(()=>$("clock").textContent=new Date().toLocaleString(),1000);
+async function refresh(){try{let h=await req("/api/health");$("connection").textContent=h.model_loaded?"Backend online · model loaded":"Backend online · model not loaded";$("connection").className="status "+(h.model_loaded?"good":"warn");
+let s=await req("/api/system");$("cpu").textContent=s.cpu_percent+"%";$("ram").textContent=s.ram_used_gb+" / "+s.ram_total_gb+" GB";$("disk").textContent=s.disk_free_gb+" GB";$("gpus").textContent=s.gpus.length;
+$("gpuinfo").innerHTML=s.gpus.map((g,i)=>`GPU ${i}: ${g.name}<br>VRAM ${g.vram_allocated_gb} / ${g.vram_total_gb} GB allocated`).join("<br>")||"No CUDA GPU detected";
+let m=await req("/api/models");$("models").innerHTML=m.map(x=>`<p><b>${x.name}</b> · ${x.status}<br><small>${x.note}</small></p>`).join("");
+}catch(e){$("connection").textContent="Backend not connected";$("connection").className="status warn";say(e.message)}}
+$("connect").onclick=refresh;
+$("generate").onclick=async()=>{try{let f=$("image").files[0];if(!f)throw Error("Choose an image first.");$("generate").disabled=true;$("progress").style.display="block";$("progress").value=0;$("jobmsg").textContent="Uploading image…";
+let d=new FormData();d.append("image",f);d.append("model_id",$("model").value);d.append("prompt",$("prompt").value);d.append("steps",$("steps").value);d.append("motion",$("motion").value);
+let j=await req("/api/generate",{method:"POST",body:d,auth:true});$("jobmsg").textContent=j.notice+" Job "+j.job_id;
+let done=false;while(!done){await new Promise(r=>setTimeout(r,2500));let st=await req("/api/jobs/"+j.job_id);$("jobmsg").textContent=st.message;$("progress").value=st.progress||0;if(st.status==="completed"){let url=base()+"/api/files/"+encodeURIComponent(st.output);$("generated").src=url;$("generated").style.display="block";$("download").innerHTML=`<p><a style="color:#9db5ff" href="${url}" download>Download generated MP4</a></p>`;done=true}else if(st.status==="failed")throw Error(st.message)}}
+catch(e){say(e.message);$("jobmsg").textContent="Generation failed."}finally{$("generate").disabled=false}};
+
+const clipFiles=[];
+function selectedClip(){return $("editClip").value}
+function renderClipLists(){
+  $("editClip").innerHTML=clipFiles.length?clipFiles.map((x,i)=>`<option value="${x.filename}">${i+1}. ${x.original}</option>`).join(""):'<option value="">Upload a video first</option>';
+  $("mergeList").innerHTML=clipFiles.length?clipFiles.map((x,i)=>`<div class="merge-item"><input type="checkbox" class="merge-check" value="${x.filename}" id="merge_${i}"><label for="merge_${i}">${i+1}. ${x.original}</label></div>`).join(""):"Add clips to enable joining.";
+  $("uploadedName").textContent=clipFiles.length?`${clipFiles.length} clip(s) ready. Select a clip below.`:"No clips added yet.";
+  if(clipFiles.length) showSource();
+}
+function showSource(){
+  const item=clipFiles.find(x=>x.filename===selectedClip());
+  if(!item)return;
+  const url=item.localUrl;
+  $("sourcePreview").src=url;$("sourcePreview").style.display="block";
+}
+$("editClip").onchange=showSource;
+$("resizePreset").onchange=()=>{
+  const custom=$("resizePreset").value==="custom";
+  $("customSize").style.display=custom?"grid":"none";
+};
+$("uploadVideo").onclick=async()=>{
+  const files=[...$("editfile").files];
+  if(!files.length){$("editStatus").textContent="Choose one or more video files first.";return;}
+  $("uploadVideo").disabled=true;$("editStatus").textContent="Uploading clips…";
+  try{
+    for(const f of files){
+      const d=new FormData();d.append("file",f);
+      const j=await req("/api/editor/upload",{method:"POST",body:d,auth:true});
+      clipFiles.push({filename:j.filename,original:f.name,localUrl:URL.createObjectURL(f)});
+    }
+    renderClipLists();$("editStatus").textContent="Upload complete. Choose an operation.";
+    $("editfile").value="";
+  }catch(e){$("editStatus").textContent=e.message}
+  finally{$("uploadVideo").disabled=false}
+};
+async function runEdit(path,body){
+  $("editStatus").textContent="Processing video… please wait.";
+  const j=await req(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),auth:true});
+  const url=base()+j.url;
+  $("edited").src=url;$("edited").style.display="block";
+  $("editDownload").innerHTML=`<p><b>Finished:</b> ${j.filename}<br><a style="color:#9db5ff" href="${url}" download>Download edited MP4</a></p>`;
+  $("editStatus").textContent="Done. Preview your result above or download it.";
+}
+$("trim").onclick=async()=>{
+  const filename=selectedClip(),start=Number($("start").value),end=Number($("end").value);
+  if(!filename){$("editStatus").textContent="Upload and select a clip first.";return}
+  if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start){$("editStatus").textContent="End time must be greater than start time.";return}
+  try{await runEdit("/api/editor/trim",{filename,start,duration:end-start})}catch(e){$("editStatus").textContent=e.message}
+};
+$("resize").onclick=async()=>{
+  const filename=selectedClip();if(!filename){$("editStatus").textContent="Upload and select a clip first.";return}
+  let w,h;
+  if($("resizePreset").value==="custom"){w=Number($("width").value);h=Number($("height").value)}
+  else [w,h]=$("resizePreset").value.split("x").map(Number);
+  if(w<256||w>1920||h<256||h>1080){$("editStatus").textContent="Use width 256–1920 and height 256–1080.";return}
+  try{await runEdit("/api/editor/resize",{filename,width:w,height:h})}catch(e){$("editStatus").textContent=e.message}
+};
+$("merge").onclick=async()=>{
+  const filenames=[...document.querySelectorAll(".merge-check:checked")].map(x=>x.value);
+  if(filenames.length<2){$("editStatus").textContent="Select at least two clips to join.";return}
+  try{await runEdit("/api/editor/merge",{filenames})}catch(e){$("editStatus").textContent=e.message}
+};
+</script></body></html>

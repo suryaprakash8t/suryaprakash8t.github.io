@@ -1,0 +1,11 @@
+diffusers==0.39.0
+transformers<5
+accelerate>=1.2
+safetensors
+huggingface_hub
+fastapi
+uvicorn
+python-multipart
+psutil
+pillow
+imageio-ffmpeg
